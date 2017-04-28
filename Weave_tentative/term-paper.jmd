@@ -1,0 +1,7 @@
+using Weave
+#Markdown
+weave(Pkg.dir("Weave","term-paper.jmd"), out_path = :pwd,
+  doctype = "md2pdf")
+
+# Term paper Numerical methods
+## Lucile Rogissart

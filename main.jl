@@ -1,0 +1,10 @@
+cd("C:/Users/lucil/OneDrive/Documents/GitHub/Master_thesis")
+include("src/autarkyeq.jl")
+#include("src/tradeeq.jl")
+include("src/dynamictemp.jl")
+
+autarkyeq.runall(10000.0, 13.0, .5)
+autarkyeq.plotall()
+#tradeeq.runall()
+dynamictemp.runall(50, 1000.0, 13.0, 1.0)
+dynamictemp.plotall(50, 1000.0, 13.0, 1.0)
