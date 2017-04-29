@@ -8,6 +8,7 @@ using Gadfly
 using Roots
 using JuMP
 using NLopt
+using Ipopt
 using AmplNLWriter, CoinOptServices
 
 # PARAMETERS
@@ -55,7 +56,8 @@ function autarky_eq(Lmax::Float64, t::Float64, sigma::Float64)
         ############## PROBLEM #############
         # ne fonctionne que pour sigma <.3, sinon too high power
         # mais a déjà fonctionné correctement avec sigma = .1 et below
-        m = Model(solver=BonminNLSolver())
+
+        m = Model(solver=IpoptSolver())
         @variable(m, q_c >= 0.0)
         @variable(m, q_m >= 0.0)
         @NLobjective(m, Max, (q_c^((sigma-1)/sigma) + q_m^((sigma-1)/sigma))^(sigma/(sigma-1)))
@@ -72,7 +74,7 @@ function autarky_eq(Lmax::Float64, t::Float64, sigma::Float64)
   ######################################
 
   # Optimal price, from profit = 0
-  popt = fzeros(p -> p - theta(dist)/a - 1/b)[1]
+  popt = theta(dist)/a + 1/b
 
   # maximum production of cereals possible
   maxqc = theta(dist)*Lmax
@@ -90,6 +92,10 @@ function autarky_eq(Lmax::Float64, t::Float64, sigma::Float64)
   function num_Qm(q_c::Float64)
     min( a*(Lmax-num_Lc(q_c)) , b*(theta(dist)*num_Lc(q_c)-q_c))
   end
+
+  ######################################
+  ############# EQUILIBRIUM ############
+  ######################################
 
   # Relative demand with a CES utility function
   num_RD = maxuty(popt)[1]/maxuty(popt)[2]
@@ -131,8 +137,11 @@ function autarky_eq(Lmax::Float64, t::Float64, sigma::Float64)
     (theta(dist) * Lmax) * (popt^(-sigma)) / (popt^(1-sigma)+1)
   end
 
+  ##############################################################################
+  # Useful values
   totcrops = theta(dist)*L_c(q_c(sigma))
-  K= totcrops - q_c(sigma)
+  K        = totcrops - q_c(sigma)
+
 
 return Dict("Optimal Relative Demand" => q_m(sigma)/q_c(sigma),
             "Optimal Relative Demand num" => num_RD,

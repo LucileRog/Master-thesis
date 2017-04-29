@@ -5,12 +5,11 @@ module tradeeq
 
 using Gadfly
 using Roots
-using ApproxFun
-using JuMP
+using NLopt
 using Optim
-using AmplNLWriter, CoinOptServices
-import ApproXD: getBasis, BSpline
-using Distributions, ApproxFun, FastGaussQuadrature
+using Ipopt
+# import ApproXD: getBasis, BSpline
+# using Distributions, ApproxFun, FastGaussQuadrature
 
 
 # PARAMETERS
@@ -25,221 +24,227 @@ Topt = 15.0      # Optimal temeprature
 
 function trade_eq(Lmax::Vector, t::Vector, sigma::Vector)
 
-  # For tests
-  Lmax = [1000.0, 700.0, 1400.0]
-  t = [14.5, 15.2, 16.5]
-  sigma = [.9,.9,.9]
+  ##############################################################################
+  ########################### WORLD CHARACTERISTICS ############################
+  ##############################################################################
 
-
-# Sum of all countries land endowments
-  Lsum = sum(Lmax[i] for i in 1:length(Lmax))
-
-# in the 2 country case, each vector Lmax, t and sigma is of dimension 2
+  # Sum of all countries land endowments
+    Lsum = sum(Lmax[i] for i in 1:length(Lmax))
 
   # distance to optimal temperature for crops
-  function d(t)
-    abs(Topt - t)
-  end
+    function d(t)
+      abs(Topt - t)
+    end
 
   dist = collect(d(t[i]) for i in 1:length(t))
 
   # crop productivity
-  function theta(d::Vector)
-    theta = ones(length(d))
-    for i in 1:length(d)
-      if gamma1 * Topt - gamma2 *d[i] > 0.0
-        theta[i] = gamma1 * Topt - gamma2 *d[i]
-      else
-        theta[i] = 0.0
+    function theta(d::Vector)
+      theta = ones(length(d))
+      for i in 1:length(d)
+        if gamma1 * Topt - gamma2 *d[i] > 0.0
+          theta[i] = gamma1 * Topt - gamma2 *d[i]
+        else
+          theta[i] = 0.0
+        end
       end
+      return theta
     end
-    return theta
-  end
 
-  # For the trade equilibrium, we have an analytical solution only for theta
-  # L_c and Q_m are computed numerically in each case
+    # For theta_w, we only have an analytical expression, for which we coded
+    # the approximation but it is too slow to be used
 
-  ##############################################################################
-  ########################### Analytical solutions #############################
-  ##############################################################################
+    # Sorting countries by decreasing theta(d)
+    countries = hcat(Lmax, theta(dist))
+    ct = sortrows(countries, by=x->x[2], rev=true) # dim = Ncountries x 2
+    Nct = length(Lmax) #Ncountries
 
-  # Sorting countries by decreasing theta(d)
-  countries = hcat(Lmax, theta(dist))
-  ct = sortrows(countries, by=x->x[2], rev=true) # dim = Ncountries x 2
-  Nct = length(Lmax) #Ncountries
-
-  # True crop productivity at the world level
-  function theta_w(L_c::Float64)
-    res=0.0 # to be replaced
-    if L_c <= ct[1,1]
-      res = ct[1,2]
-    end
-    for i in 2:Nct
-      if sum(ct[j,1] for j in 1:i-1) <= L_c <= sum(ct[j,1] for j in 1:i)
-        res = sum((ct[j,1]/L_c)*ct[j,2] for j in 1:i-1) + ((L_c-sum(ct[j,1] for j in 1:i-1))/L_c)*ct[i,2]
+    # True crop productivity at the world level
+    function theta_w(L_c::Float64)
+      res=0.0 # to be replaced
+      if L_c <= ct[1,1]
+        res = ct[1,2]
       end
+      for i in 2:Nct
+        if sum(ct[j,1] for j in 1:i-1) <= L_c <= sum(ct[j,1] for j in 1:i)
+          res = sum((ct[j,1]/L_c)*ct[j,2] for j in 1:i-1) + ((L_c-sum(ct[j,1] for j in 1:i-1))/L_c)*ct[i,2]
+        end
+      end
+      return res
     end
-    return res
-  end
-  plot(theta_w, 0.0, Lsum)
 
-  # Define some maximal values
+  ######################################
+  ############### SUPPLY ###############
+  ######################################
+
+  # Define some useful maximal values
   maxqc = theta_w(Lsum)*Lsum
   htheta = ct[1,2] # the maximal tehta because ct are sorted by decreasing theta
   maxpopt = htheta/a + 1/b
 
   # L_c obtained by meat producers equating inputs
-  function L_c(q_c::Float64)
-  fzeros(L_c -> a*(Lsum - L_c) - b*(theta_w(L_c)*L_c - q_c), 1.0, Lsum)[1]
-  end
-  # about 20 seconds
+    function L_c(q_c::Float64)
+    fzeros(L_c -> a*(Lsum - L_c) - b*(theta_w(L_c)*L_c - q_c), 1.0, Lsum)[1]
+    end
+    # 20. seconds
+
+  # Gives Q_m as a function of q_c
+    function Q_m(q_c::Float64)
+      min( a*(Lsum-L_c(q_c)) , b*(theta_w(L_c(q_c))*L_c(q_c)-q_c) )
+    end
+    # 0.36 seconds
 
   # Optimal price, from profit = 0
-  function popt(q_c::Float64)
-    popt = fzeros(p -> p - theta_w(L_c(q_c))/a - 1/b, 0.0, maxpopt)[1]
-  end
-  # about 2.7 seconds
-
-  # Relative demand with a CES utility function
-  function RD(q_c)
-    popt(q_c) ^ (-sigma[1])
-  end
-  # about 0.4 seconds
-
-  # Gives Q_m
-  function Q_m(q_c::Float64)
-    min( a*(Lsum-L_c(q_c)) , b*(theta_w(L_c(q_c))*L_c(q_c)-q_c) )
-  end
-  # 0.36 seconds
+    function popt(q_c::Float64)
+      theta_w(L_c(q_c))/a + 1/b
+    end
+    # about 2.7 seconds
 
 
-  # Optimal q_c from RD = RS
-  # By plotting q_c -> RD(q_c) - Q_m(q_c)/q_c, we notice that the function is
-  # extremely flat towards 0, which slows a lot the computation
-  function RDRS(q_c::Float64)
-    RD(q_c) - Q_m(q_c)/q_c
-  end
-  # 0.68 seconds
+  ######################################
+  ############### DEMAND ###############
+  ######################################
 
-  function hRDRS(q_c::Float64)
-    (RD(q_c) - Q_m(q_c)/q_c)*1e8
-  end
-  # 0.71 seconds
-  plot(x = linspace(0.0, maxqc, 100), y = [hRDRS(linspace(0.0, maxqc, 100)[i]) for i in 1:100], Geom.point)
-  # 70 seconds
+  # We assume that sigma is the same in each country
 
-  qc = fzeros(x -> hRDRS(x), 0.0, maxqc)
-  #
+    ## Analytical ######################
 
-  function abshRDRS(q_c::Float64)
-    abs((RD(q_c) - Q_m(q_c)/q_c)*1e8)
-  end
-
-  qc = optimize(abshRDRS, 0.0, LBFGS(), Optim.Options(autodiff = true))
-  #
-
-  # Approximate the function
-  # function approx_RDRS(q_c::Float64)
-  #   ub,lb = (maxqc, 0.0)
-	#   nknots = 13
-  #   deg = 3
-	#   bs1 = BSpline(nknots,deg,lb,ub)	# equally spaced knots in [lb,ub]
-	#   nevals = 5 * bs1.numKnots # get nBasis < nEvalpoints
-	# # scaled knots
-  #   G(k,s) = GeneralizedPareto(k,s,0)
-  #   pf(k,s) = quantile(GeneralizedPareto(k,s,0),linspace(0.05,cdf(G(0.5,1),5),6))
-	#   myknots = vcat(-reverse(pf(0.5,1)),0.0,pf(0.5,1))
-  #   bs2 = BSpline(myknots,deg)
-	# # get coefficients
-	#   eval_points = collect(linspace(lb,ub,nevals))
-	# #c1 = getBasis(eval_points,bs1) \ runge(eval_points)
-	#   c2 = getBasis(eval_points,bs2) \ [RDRS(eval_points[i]) for i in 1:length(eval_points)]
-  # return getBasis([q_c],bs1) * c2
-  # end
-
-  if length(fzeros(q_c -> RDRS(q_c), 0.0, maxqc)) == 1
-  qc = fzeros(q_c -> RDRS(q_c), 0.0, maxqc)[1]
-  end
-  if length(fzeros(q_c -> RDRS(q_c), 0.0, maxqc)) == 0
-  qc = 0.0
-  end
-
-  # Optimal q_m
-  qm = num_Qm(qc)
-
-  ##############################################################################
-  ########################### Numerical solutions ##############################
-  ##############################################################################
-
-  # Approximation of crop productivity at the world level
-  # WARNING : so far only defined for a world with 3 countries
-  function approx_thetaw(L_c)
-    ub,lb = (Lsum, 1.0)
-    deg = 3
-    # Countries
-    countries = hcat(Lmax, theta(dist))
-    ct = sortrows(countries, by=x->x[2], rev=true) # dim = Ncountries x 2
-    N = length(Lmax) #Ncountries
-    # myknots with knot multiplicity at 0
-    kink = ones(N-1)
-      for n in 1:N-1
-        kink[n] = sum(ct[i,1] for i in 1:n)
+      function q_c(popt::Float64)
+        (theta_w(L_c(q_c)) * Lsum) / (popt^(1-sigma)+1)
       end
-    nknots = 5
-    linsp = zeros(N,nknots)
-      linsp[1,:] = linspace(1e-3, ct[1,1], nknots)
-      for n in 2:N
-        linsp[n,:] = linspace(sum(ct[i,1] for i in 1:n-1), sum(ct[i,1] for i in 1:n), nknots)
+
+      function q_m(popt::Float64)
+        (theta_w(L_c(q_c)) * Lsum) * (popt^(-sigma)) / (popt^(1-sigma)+1)
       end
-    myknots = vcat(linsp[1,:], kink[1], linsp[2,:], kink[2], linsp[3,:])
-    knots = sort(myknots, rev=false)
-    # get coefficients for each case
-    params = BSpline(knots,deg)
-    nevals = 5 * params.numKnots
-    eval_points = collect(linspace(lb,ub,nevals))
-    c = getBasis(eval_points,params) \ [theta_w(eval_points[i]) for i in 1:nevals]
-    return (getBasis([L_c],params)*c)[1]
-  end
 
-  grid = linspace(1e-3, Lsum, 100)
-  plot(x=grid, y=[maxtheta(grid[i]) for i in 1:100], Geom.point,
-    Theme(default_color=colorant"darkblue", default_point_size=1.5pt,
-    highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("L_c,w"),
-    Guide.ylabel("MAximal theta"), Guide.title("Numerical solution for theta(L_c)"))
-  # We notice that the function shows kinks each time cereals start to be
-  # produced in a new country => ApproXD package and use of Bsplines
+      function RD(q_c::Float64)
+        popt(q_c) ^ (-sigma[1])
+      end
+
+    ## Numerical ######################
+
+      # Demand maximizes utility under the budget constraint
+      # Recall that 0 < sigma < 1
+
+      # q[1] = meat
+      # q[2] = cereals
+
+      function objfun(q::Vector, grad::Vector)
+        sig = sigma[1]
+        if length(grad) > 0
+          grad[1] = q[1]^(-1/sig) * (q[1]^((sig-1)/sig) + q[2]^((sig-1)/sig))^(1/(sig-1))
+          grad[2] = q[2]^(-1/sig) * (q[1]^((sig-1)/sig) + q[2]^((sig-1)/sig))^(1/(sig-1))
+        end
+        obj = (q[1]^((sig-1)/sig) + q[2]^((sig-1)/sig))^(sig/(sig-1))
+        return grad, obj
+      end
+
+      function constr(q::Vector, grad::Vector)
+        if length(grad) > 0
+  				  grad[1] = theta_w(L_c(q[2]))/a + 1/b
+   				grad[2] = 1
+   			end
+     		constr = q[1]*(theta_w(L_c(q[2]))/a + 1/b) + q[2] - sum((gamma1*Topt - gamma2*dist[i])*Lmax[i] for i in 1:Nct)
+     		return grad, constr
+      end
+
+      function maxuty()
+  		    opt = NLopt.Opt(:LD_SLSQP,2)
+  		      # define the type optimization
+          NLopt.max_objective!(opt,(q,g)->objfun(q,g)[2])
+          # define the bounds, note that consumption can not be negative
+  		      lower_bounds!(opt,[0.0 ; 0.0])
+  		      xtol_rel!(opt,1e-9)
+  		      ftol_rel!(opt,1e-9)
+  	      # define the constraint
+          NLopt.equality_constraint!(opt, (q,g)-> constr(q,g)[2],1e-9)
+      (optf,optq,ret) = NLopt.optimize(opt, rand(2))
+  		  return optq
+  	end
+
+    # I use NLopt because the multiple occurence of theta_w() in the constraint
+    # would have complicated a lot the expression in @NLconstraint
 
 
-  Lc       = L_c(q_c(sigma))
+  ######################################
+  ############ EQUILIBRIUM #############
+  ######################################
+
+  ## Analytical solutions
+   # where the analytical part comes from the maximuzation of utility
+
+    function RDRS(q_c::Float64)
+      RD(q_c) - Q_m(q_c)/q_c
+    end
+    # 0.68 seconds
+
+    function hRDRS(q_c::Float64)
+      (RD(q_c) - Q_m(q_c)/q_c)*1e8
+    end
+    # 0.71 seconds
+
+    function abshRDRS(q_c::Float64)
+      abs((RD(q_c) - Q_m(q_c)/q_c)*1e8)
+    end
+    # plot(x = linspace(0.0, maxqc, 100), y = [abshRDRS(linspace(0.0, maxqc, 100)[i]) for i in 1:100], Geom.point)
+
+      if Optim.optimize(abshRDRS, 0.0, maxqc).minimum < 1e-3
+        qc = Optim.optimize(abshRDRS, 0.0, maxqc).minimizer
+        qm = Q_m(qc)
+      else
+        qc = 0.0
+        qm = 0.0
+      end
+
+      ##### Note on the method for finding the equilibrium
+      ## The function RD - RS was extremely flat towards zero which made the function
+        # fzeros() very slow (about 780 seconds to find the equilibrium)
+      ## A first tentative was to raise the "power" of RD - RS by multiplying the
+        # result by 1e8, but it did not increase the speed dramatically
+      ## The solution I chose was to take the absolute value of the function, so that
+        # the minimum would be where the function hit 0, I use the package Optim,
+        # and now the equilibrium is found in about 20 seconds
+
+  ## Numerical solutions
+
+        num_qm = maxuty()[1]
+        num_qc = maxuty()[2]
+
+
+  Lc       = L_c(qc)
+  num_Lc   = L_c(num_qc)
   totcrops = theta_w(Lc)*Lc
-  K        = totcrops - q_c(sigma)
+  K        = totcrops - qc
 
-  figure_eq = plot(xintercept=[RD(sigma)], yintercept=[popt], Geom.vline, Geom.hline)
 
-return Dict("Optimal Relative Demand" => RD(sigma),
-            "Optimal price" => popt,
-            "Max theta" => theta_w(Lc),
-            "Max theta num" => approx_maxtheta(Lc),
-            "Optimal net cereal consumption" => q_c(sigma),
-            "Optimal meat consumption" => q_m(sigma),
-            "Optimal land for crops" => Lc,
-            "Optimal meat prod" => Q_m(q_c(sigma)),
-            "Percentage of feed" => (K/totcrops)*100.0)
+return Dict("Optimal Relative Demand" => RD(qc),
+            "Optimal Relative Demand num" => num_qm/num_qc,
+            "Optimal price" => popt(qc),
+            "Optimal price num" => popt(num_qc),
+            "Optimal net cereal consumption" => qc,
+            "Optimal net c C° num" => num_qc,
+            "Optimal meat consumption" => qm,
+            "Optimal m C° num" => num_qm,
+            "Percentage of feed" => (K/totcrops)*100.0,
+            "Percentage of land to crop" => (Lc/Lsum)*100.0,
+            "Percentage of land to crop num" => (num_Lc/Lsum)*100.0)
 
 end # function trade_eq
 
 
 function runall()
-  Lmax = [1000.0, 800.0, 500.0]
+  Lmax = [1200.0, 800.0, 1600.0]
   t = [15.0, 14.0, 17.5]
-  sigma = ones(length(Lmax))
+  sigma = [.9,.9,.9]
   res = trade_eq(Lmax, t, sigma)
-  println("Solution for q_c: ", res["Optimal net cereal consumption"])
-  println("Solution for q_m: ", res["Optimal meat consumption"])
+  println("-------------------------------------------")
+  println("Solutions when Lmax = ", Lmax, "  t = ", t, "  and sigma = ", sigma)
+  println("Numerical solution for q_c: ", res["Optimal net c C° num"])
+  println("Numerical solution for q_m: ", res["Optimal m C° num"])
   println("Percent of cereals used as feed: ", res["Percentage of feed"])
-  #display(landplots)
-  #display(tempplots)
-  #display(sigmaplots)
+  println("Percentage of land for crop production: ", res["Percentage of land to crop"])
+  println("Optimal relative price: ", res["Optimal price"])
+  println("-------------------------------------------")
 end
 
 end
