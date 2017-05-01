@@ -358,7 +358,7 @@ function datafr(Lmax::Vector, t::Vector, sigma::Vector)
       autqc  = zeros(Nct)
       for i in 1:Nct
         autqc[i] = autarkyeq.autarky_eq(ct[i,1], Temp[i], ct[i,3])["Optimal net cereal consumption"]
-        tradec[i] = worldccons - autqc[i]
+        tradec[i] = (1/Nct)*worldccons - autqc[i]
       end
       tradec
 
@@ -367,9 +367,8 @@ function datafr(Lmax::Vector, t::Vector, sigma::Vector)
       tradem = zeros(Nct)
       autqm  = zeros(Nct)
       for i in 1:Nct
-        i = 3
         autqm[i] = autarkyeq.autarky_eq(ct[i,1], Temp[i], ct[i,3])["Optimal meat consumption"]
-        tradem[i] = worldmcons - autqm[i]
+        tradem[i] = (1/Nct)*worldmcons - autqm[i]
       end
       tradem
 
@@ -386,4 +385,4 @@ return DataFrame(Land_endowment =ct[:,1],
 end
 
 
-end # end
+end # end module
