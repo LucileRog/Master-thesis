@@ -3,9 +3,14 @@ module subsistconst
 # module to find check whether the subsistence consumption constraint is
 # satisfied or not
 
-pwd()
 include("autarkyeq.jl")
+
 using Gadfly
+using Roots
+using JuMP
+using NLopt
+using Ipopt
+using AmplNLWriter, CoinOptServices
 
 # PARAMETERS
 mu_m = 1370.0 # coefficient of nutrition for meat (here beef in cal/kg)
@@ -80,16 +85,16 @@ nevals = 100
 ## Land endowment, fixing t=15.0 and sigma = 1.0
 # Land endowment and cereal consumption
 gridland = linspace(1e-4, 1e6, nevals) # setting a grid for land endowment
-yland = [subsist(gridland[i], 15.0, 1.0) for i in 1:nevals] #corresponding y using function autarky_eq
-landplot = plot(x = gridland, y = yland, Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("Land endowment"), Guide.ylabel("Subs const"), Guide.title("Fixing t=15.0 and sigma = 1.0"))
+yland = [subsist(gridland[i], 15.0, .9) for i in 1:nevals] #corresponding y using function autarky_eq
+landplot = plot(x = gridland, y = yland, Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("Land endowment"), Guide.ylabel("Subs const"), Guide.title("Fixing t=15.0 and sigma = .9"))
 
 ## Temperatures, fixing Lmax=1000 and sigma = 1.0
-gridtemp = linspace(5.0, 25.0, 1e2) # setting a grid for land endowment
-ytemp = [subsist(1000.0, gridtemp[i], 1.0) for i in 1:nevals] #corresponding y using function autarky_eq
-tempplot = plot(x = gridtemp, y = ytemp, Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("Temperatures"), Guide.ylabel("Subs const"), Guide.title("Fixing Lmax=1000 and sigma = 1.0"))
+gridtemp = linspace(5.0, 25.0, nevals) # setting a grid for land endowment
+ytemp = [subsist(1000.0, gridtemp[i], .9) for i in 1:nevals] #corresponding y using function autarky_eq
+tempplot = plot(x = gridtemp, y = ytemp, Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("Temperatures"), Guide.ylabel("Subs const"), Guide.title("Fixing Lmax=1000 and sigma = .9"))
 
 ## CES, fixing Lmax=1000 and t = 15.0
-gridsigma = linspace(0.0, 25.0, 1e2) # setting a grid for land endowment
+gridsigma = linspace(1e-2, 1-1e-2, nevals) # setting a grid for land endowment
 ysigma = [subsist(1000.0, 15.0, gridsigma[i]) for i in 1:nevals] #corresponding y using function autarky_eq
 sigmaplot = plot(x = gridsigma, y = ysigma, Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("CES"), Guide.ylabel("Subs const"), Guide.title("Fixing Lmax=1000 and t = 15.0"))
 

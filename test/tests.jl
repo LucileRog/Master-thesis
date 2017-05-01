@@ -1,13 +1,11 @@
 module Modeltests
 
-include("src/autarkyeq.jl")
-include("src/tradeeq.jl")
-
-#using autarkyeq, tradeeq, dynamictemp
 using Base.Test
 
 
 @testset "Autarky equilibrium tests" begin
+
+include("../src/autarkyeq.jl")
 tol = 1e-8
 ntest = 5
 grid = hcat(linspace(1.0, 1000.0, ntest), linspace(5.0, 25.0, ntest), linspace(.3, 1-1e-4, ntest))
@@ -56,10 +54,12 @@ end # autarky tests set
 
 
 @testset "Trade equilibrium tests" begin
+
+include("../src/tradeeq.jl")
 tol = 1e-8
 ntest = 2
 worlds = (hcat([1200.0, 800.0, 1600.0], [15.0, 14.0, 17.5], [.9,.9,.9]), hcat([300.0, 1600.0], [13.9, 14.3], [.3,.3]))
-res = collect(tradeeq.trade_eq(worlds[i][:,1], worlds[i][:,2], worlds[i][:,3]) for i in 1:2)
+res = collect(tradeeq.trade_eq(worlds[i][:,1], worlds[i][:,2], worlds[i][:,3]) for i in 1:ntest)
 
   @testset "Basic values" begin
   zeroland = tradeeq.trade_eq([0.0,0.0], [13.6,15.4], [.6,.6])
@@ -71,6 +71,7 @@ res = collect(tradeeq.trade_eq(worlds[i][:,1], worlds[i][:,2], worlds[i][:,3]) f
   end
 
   @testset "RD, Analytical vs. Numerical" begin
+  tol = 1e-7
     for i in 1:ntest
       if isnan(res[i]["Optimal Relative Demand"]) == true
         @test isnan(res[i]["Optimal Relative Demand num"]) == true
@@ -91,16 +92,19 @@ res = collect(tradeeq.trade_eq(worlds[i][:,1], worlds[i][:,2], worlds[i][:,3]) f
   end
 
   @testset "Optimal q_c and q_m, Analytical vs. Numerical" begin
-  tol = 1e-1
     for i in 1:ntest
+      tol = 1e5
       @test abs(res[i]["Optimal net cereal consumption"] - res[i]["Optimal net c C° num"]) < tol
     end
     for i in 1:ntest
+      tol = 1e2
       @test abs(res[i]["Optimal meat consumption"] - res[i]["Optimal m C° num"]) < tol
     end
   end
 
 end # Trade equilibrium tests
+
+
 
 
 @testset "Dynamic temperature tests" begin

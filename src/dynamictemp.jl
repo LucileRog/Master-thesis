@@ -3,9 +3,8 @@ module dynamictemp
 # module to find the dynamic path of temperature, emissions and meat consumption
 # when temeprature is endogenised
 
-cd("C:\\Users\\lucil\\OneDrive\\Documents\\GitHub\\Master_thesis\\src")
 include("autarkyeq.jl")
-#include("tradeeq.jl")
+#include("src/tradeeq.jl")
 include("subsistconst.jl")
 
 using Gadfly
