@@ -8,10 +8,6 @@ using Roots
 using NLopt
 using Optim
 using Ipopt
-using DataFrames
-
-include("autarkyeq.jl")
-
 
 
 # PARAMETERS
@@ -229,13 +225,8 @@ function trade_eq(Lmax::Vector, t::Vector, sigma::Vector)
         vectrue = [true for i in 5:100]
         # if this is true, we apply the method to find the root explained above
          if crit == vectrue
-            if Optim.optimize(q_c -> abshRDRS(q_c, ct), 0.0, maxqc).minimum < 1e-1
               qc = Optim.optimize(q_c -> abshRDRS(q_c, ct), 0.0, maxqc).minimizer
               qm = Q_m(qc, ct)
-            else
-              qc = 0.0
-              qm = 0.0
-            end
          else
         # otherwise, we simply run the fzeros() function
           if length(fzeros(q_c -> RDRS(q_c, ct), 0.0, maxqc)) == 1
@@ -268,121 +259,23 @@ function trade_eq(Lmax::Vector, t::Vector, sigma::Vector)
     K        = totcrops - qc
 
 
-  return Dict("Optimal Relative Demand" => RD(qc, ct),
-              "Optimal Relative Demand num" => num_qm/num_qc,
-              "Optimal price" => popt(qc, ct),
-              "Optimal price num" => popt(num_qc, ct),
+  return Dict("Number of countries"            => Nct,
+              "Optimal Relative Demand"        => RD(qc, ct),
+              "Optimal Relative Demand num"    => num_qm/num_qc,
+              "Optimal price"                  => popt(qc, ct),
+              "Optimal price num"              => popt(num_qc, ct),
               "Optimal net cereal consumption" => qc,
-              "Optimal net c C° num" => num_qc,
-              "Optimal meat consumption" => qm,
-              "Optimal m C° num" => num_qm,
-              "Total land to crops" => Lc,
-              "Total crop production" => totcrops,
-              "Percentage of feed" => (K/totcrops)*100.0,
-              "Percentage of land to crop" => (Lc/Lsum)*100.0,
+              "Optimal net c C° num"           => num_qc,
+              "Optimal meat consumption"       => qm,
+              "Optimal m C° num"               => num_qm,
+              "Total land to crops"            => Lc,
+              "Total crop production"          => totcrops,
+              "Percentage of feed"             => (K/totcrops)*100.0,
+              "Percentage of land to crop"     => (Lc/Lsum)*100.0,
               "Percentage of land to crop num" => (num_Lc/Lsum)*100.0)
 
 end # function trade_eq
 
-
-function runall(Lmax::Vector, t::Vector, sigma::Vector)
-  res = trade_eq(Lmax, t, sigma)
-  println("-------------------------------------------")
-  println("Solutions when Lmax = ", Lmax, "  t = ", t, "  and sigma = ", sigma)
-  println("Numerical solution for q_c: ", res["Optimal net c C° num"])
-  println("Numerical solution for q_m: ", res["Optimal m C° num"])
-  println("Percent of cereals used as feed: ", res["Percentage of feed"])
-  println("Percentage of land for crop production: ", res["Percentage of land to crop"])
-  println("Optimal relative price: ", res["Optimal price"])
-  println("-------------------------------------------")
-end
-
-
-function datafr(Lmax::Vector, t::Vector, sigma::Vector)
-  # Lmax = [1200.0, 800.0, 1600.0]
-  # t = [15.0, 14.0, 17.5]
-  # sigma = [.9,.9,.9]
-
-  ct = sortct(Lmax, t, sigma)      # Matrix of countries, sorted (L, theta, sig)
-  Nct = length(ct[:,1])
-  countries = hcat(Lmax, t, sigma) # Matrix of countries, not sorted (L, t, sig)
-  worldres = trade_eq(Lmax, t, sigma)
-
-  # Temperature among sorted countries
-    Temp = zeros(Nct)
-    for i in 1:Nct
-      for j in 1:Nct
-        if ct[i,1] == countries[j,1]
-          Temp[i] = countries[j,2]
-        end
-      end
-    end
-
-  # Share of lands to crops per country
-    worldLc = worldres["Total land to crops"]
-    shareLc = zeros(Nct) # to be replaced
-    if worldLc <= ct[1,1]
-      shareLc[1] = 100.0
-    end
-    for i in 2:Nct
-      if sum(ct[j,1] for j in 1:i-1) <= worldLc <= sum(ct[j,1] for j in 1:i)
-        for k in 1:Nct-1
-        shareLc[k] = ct[k,1]/worldLc
-        end
-        shareLc[i] = 1 - sum(shareLc[j] for j in 1:i-1)
-      end
-    end
-    shareLc
-
-  # Share of cereal production
-    worldcprod = worldres["Total crop production"]
-    sharecprod = zeros(Nct)
-    for i in 1:Nct
-      sharecprod[i] = ct[i,2]*(shareLc[i]*worldLc)/worldcprod
-    end
-    sharecprod
-
-  # Share of meat production
-    # Recall that Q_m = q_m
-    worldmprod = worldres["Optimal meat consumption"]
-    sharemprod = zeros(Nct)
-    for i in 1:Nct
-      sharemprod[i] = a*(ct[i,1]-shareLc[i]*worldLc)
-    end
-    sharemprod
-
-  # Imports/exports
-    # cereals
-      worldccons = worldres["Optimal net cereal consumption"]
-      tradec = zeros(Nct)
-      autqc  = zeros(Nct)
-      for i in 1:Nct
-        autqc[i] = autarkyeq.autarky_eq(ct[i,1], Temp[i], ct[i,3])["Optimal net cereal consumption"]
-        tradec[i] = (1/Nct)*worldccons - autqc[i]
-      end
-      tradec
-
-    # meat
-      worldmcons = worldres["Optimal meat consumption"]
-      tradem = zeros(Nct)
-      autqm  = zeros(Nct)
-      for i in 1:Nct
-        autqm[i] = autarkyeq.autarky_eq(ct[i,1], Temp[i], ct[i,3])["Optimal meat consumption"]
-        tradem[i] = (1/Nct)*worldmcons - autqm[i]
-      end
-      tradem
-
-return DataFrame(Land_endowment =ct[:,1],
-                 Temperature=Temp,
-                 CES=ct[:,3],
-                 Crop_yields=ct[:,2],
-                 Share_land_to_crops=shareLc,
-                 Share_cereal_prod=sharecprod,
-                 Share_meat_prod=sharemprod,
-                 Trade_in_cereals=tradec,
-                 Trade_in_meat=tradem)
-
-end
 
 
 end # end module

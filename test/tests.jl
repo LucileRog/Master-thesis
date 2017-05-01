@@ -55,7 +55,9 @@ end # autarky tests set
 
 @testset "Trade equilibrium tests" begin
 
+include("../src/autarkyeq.jl")
 include("../src/tradeeq.jl")
+include("../src/tradeeqdf.jl")
 tol = 1e-8
 ntest = 2
 worlds = (hcat([1200.0, 800.0, 1600.0], [15.0, 14.0, 17.5], [.9,.9,.9]), hcat([300.0, 1600.0], [13.9, 14.3], [.3,.3]))
@@ -102,14 +104,24 @@ res = collect(tradeeq.trade_eq(worlds[i][:,1], worlds[i][:,2], worlds[i][:,3]) f
     end
   end
 
+  @testset "Imports = Exports" begin
+      resdf = collect(tradeeqdf.datafr(worlds[i][:,1], worlds[i][:,2], worlds[i][:,3]) for i in 1:ntest)
+        for i in 1:ntest
+          @test abs(sum(resdf[i][8][j] for j in 1:length(resdf[i][8]))) < 1e5
+          @test abs(sum(resdf[i][9][j] for j in 1:length(resdf[i][9]))) < 10.0
+        end
+  end
+
 end # Trade equilibrium tests
 
 
+@testset "Subsistence consumption condition" begin
 
+end # subsistence const
 
 @testset "Dynamic temperature tests" begin
 
-end
+end # Dynamic prog
 
 
 end # Module
