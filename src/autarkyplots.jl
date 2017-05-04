@@ -8,7 +8,7 @@ include("autarkyeq.jl")
 
 using Gadfly
 
-set_default_plot_size(20cm, 15cm)
+set_default_plot_size(25cm, 15cm)
 nevals = 100
 
 ## Land endowment, fixing t=15.0 and sigma = 1.0
@@ -42,10 +42,8 @@ nevals = 100
   sigmaplot2 = plot(x = gridsigma, y = collect(ysigma[i]["Optimal meat consumption"] for i in 1:nevals), Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("CES"), Guide.ylabel("Opt q_m"), Guide.title("Fixing Lmax=1000 and t = 15.0"))
   sigmaplot3 = plot(x = gridsigma, y = collect(ysigma[i]["Optimal Relative Demand"] for i in 1:nevals), Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("CES"), Guide.ylabel("Opt RD"), Guide.title("Fixing Lmax=1000 and t = 15.0"))
   sigmaplot4 = plot(x = gridsigma, y = collect(ysigma[i]["Optimal price"] for i in 1:nevals), Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("CES"), Guide.ylabel("Opt price"), Guide.title("Fixing Lmax=1000 and t = 15.0"))
-  sigmaplot5 = plot(x = gridsigma, y = collect(ysigma[i]["Percentage of land to crop"] for i in 1:nevals), Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("CES"), Guide.ylabel("% land to crop"), Guide.title("Fixing Lmax=1000 and t = 15.0"))
-  sigmaplot6 = plot(x = gridsigma, y = collect(ysigma[i]["Percentage of feed"] for i in 1:nevals), Theme(default_color=colorant"darkblue", default_point_size=1.5pt, highlight_width=0.05pt), Geom.point, Geom.line, Guide.xlabel("CES"), Guide.ylabel("% crop to feed"), Guide.title("Fixing Lmax=1000 and t = 15.0"))
 
-  sigmaplots = gridstack([sigmaplot1 sigmaplot2; sigmaplot3 sigmaplot4; sigmaplot5 sigmaplot6])
+  sigmaplots = gridstack([sigmaplot1 sigmaplot2; sigmaplot3 sigmaplot4])
 
 function plotall()
   display(landplots)

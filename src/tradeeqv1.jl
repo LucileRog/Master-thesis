@@ -7,7 +7,6 @@ using Gadfly
 using Roots
 using NLopt
 using Optim
-using JuMP
 using Ipopt
 
 
@@ -24,6 +23,22 @@ gamma2 = 600      # slope coef of how crop productivity decreases with
 Topt   = 15.0
 
 
+  ######################################
+  ############# COUNTRIES ##############
+  ######################################
+
+  # A function to generate a sorted list of countries
+      function sortct(Lmax::Vector, t::Vector, sigma::Vector)
+        # Number of countries
+          Nct = length(Lmax)
+        # Sum of all countries land endowments
+          Lsum = sum(Lmax[i] for i in 1:Nct)
+        # Distance from optimal temperature for all countries
+          dist = collect(d(t[i]) for i in 1:Nct)
+        # Sorting countries by decreasing theta(d)
+          countries = hcat(Lmax, theta(dist), sigma, t, dist)
+          ct = sortrows(countries, by=x->x[2], rev=true) # 1st sort by decreasing thetas
+      end
 
 
   ######################################
@@ -58,20 +73,8 @@ Topt   = 15.0
     function num_theta_w(L_c::Float64, ct::Matrix)
       Nct = length(ct[:,1])
       if Nct == 2
-        if ct[1,2] == ct[2,2]
-          if ct[1,1] <= ct[2,1] && L_c/2 <= ct[1,1]
-            return ([L_c/2,L_c/2], ct[1,2])
-          elseif ct[1,1] <= ct[2,1] && L_c/2 > ct[1,1]
-            return ([ct[1,1], L_c-ct[1,1]], ct[1,2])
-          elseif ct[2,1] <= ct[1,1] && L_c/2 <= ct[2,1]
-            return ([L_c/2,L_c/2], ct[1,2])
-          elseif ct[2,1] <= ct[1,1] && L_c/2 > ct[2,1]
-            return ([L_c-ct[2,1], ct[2,1]], ct[1,2])
-          end
-        else
-          res = Optim.optimize(x -> obj_thetaw(x, L_c, ct), 0.0, min(ct[1,1], L_c))
-          return ([res.minimizer, L_c-res.minimizer], -res.minimum)
-        end
+        res = Optim.optimize(x -> obj_thetaw(x, L_c, ct), 0.0, min(ct[1,1], L_c))
+        return ([res.minimizer, L_c-res.minimizer], -res.minimum)
       elseif Nct > 2
         m = Model(solver=IpoptSolver())
         @variable(m, 0.0 <= Lc[i=1:Nct] <= ct[i,1])
@@ -81,6 +84,38 @@ Topt   = 15.0
         return res = (getvalue(Lc), getobjectivevalue(m))
       end
     end
+
+  # True crop productivity at the world level
+    # function theta_w(L_c::Float64, ct::Matrix)
+    #   Nct = length(ct[:,1]) # countries are sorted by decreasing theta
+    #   res=0.0 # to be replaced
+    #   alldiff = [ct[i,2] != ct[i+1,2] for i in 1:Nct-1]
+    #   # for 2 countries
+    #   if Nct == 2
+    #     if alldiff == trues(Nct-1) # if all thetas are different
+    #       if L_c <= ct[1,1]
+    #         res = ct[1,2] # theta_w = highest theta
+    #       elseif ct[1,1] <= L_c <= ct[1,1] + ct[2,1]
+    #         res = (ct[1,1]/L_c)*ct[1,2] + (1-ct[1,1]/L_c)*ct[2,2] # weighted sum
+    #       end
+    #     else # if both countries have same theta, theta_w = theta_1 = theta_2
+    #       res = ct[1,2] # or ct[2,2]
+    #     end # same theta
+    #   # If there are more than 2 countries
+    #   else
+    #     if alldiff == trues(Nct-1) # if all thetas are different
+    #       if L_c <= ct[1,1]
+    #         res = ct[1,2] # theta_w = highest theta
+    #       end
+    #       for i in 2:Nct # if not, a weighted sum of thetas where highest theta has highest share
+    #         if sum(ct[j,1] for j in 1:i-1) <= L_c <= sum(ct[j,1] for j in 1:i)
+    #           res = sum((ct[j,1]/L_c)*ct[j,2] for j in 1:i-1) + ((L_c-sum(ct[j,1] for j in 1:i-1))/L_c)*ct[i,2]
+    #         end
+    #       end
+    #     end # all thetas are different
+    #   end
+    #   return res
+    # end
 
   # L_c obtained by meat producers equating inputs
     function L_c(q_c::Float64, ct::Matrix)
@@ -93,7 +128,6 @@ Topt   = 15.0
         end
     end
 
-  # returns countries shares of land allocated to cereals and meat
     function num_shares(q_c::Float64, ct::Matrix)
       Nct = length(ct[:,1])
       Lsum = sum(ct[i,1] for i in 1:Nct)
@@ -108,6 +142,47 @@ Topt   = 15.0
       end
       return (shLc, shLm)
     end
+
+    # function returning land allocation
+    # function shares(q_c::Float64, ct::Matrix)
+    #   # recall countries are first sorted by decreasing thetas, then by incresing
+    #   # land endowments
+    #   Nct = length(ct[:,1])
+    #   Lsum = sum(ct[i,1] for i in 1:Nct)
+    #   worldLc = L_c(q_c, ct)
+    #   worldLm = Lsum - L_c(q_c, ct)
+    #   sh = zeros(Nct, 2) # to be replaced (sharesLc, sharesQm)
+    #   alldiff = [ct[i,2] != ct[i+1,2] for i in 1:Nct-1]
+    #   # for 2 countries
+    #   if Nct == 2
+    #     if alldiff == trues(Nct-1) # if all thetas are different
+    #       if worldLc <= ct[1,1]       # tot lands required for crops < Lmax of highest theta
+    #         sh[1,1] = 1.0         # only highest theta's land used for crops
+    #         sh[1,2] = (ct[1,1]-worldLc)/worldLm
+    #       else                        # if highest theta's land not enough
+    #         sh[1,1] = ct[1,1]/worldLc      # highest theta produces as much crops as possible
+    #         sh[2,1] = 1 - ct[1,1]/worldLc  # lowest theta produces the rest
+    #       end
+    #     else # if both countries have same theta
+    #       if ct[1,1] == ct[2,1] # if countries are symmetric
+    #         sh[:,1] = [1/2, 1/2] # equal share for each type of good
+    #       else # if countries have different land endowments
+    #         if worldLc/2 <= ct[1,1] # if lowest land country has more than half the resuired land for crops
+    #           sh[:,1] = [1/2, 1/2]  # land to crops equally allocated across countries
+    #           for i in 1:2
+    #             sh[i,2] = (ct[i,1]/2)/worldLm # the rest of each country goes to meat
+    #           end
+    #         else # if half the required lands for crops is larger than the smallest land endowment
+    #           sh[1,1] = ct[1,1]/worldLc # smallest land country takes as much as it can
+    #           sh[2,1] = 1.0 - sh[1,1]
+    #         end
+    #       end
+    #     end # same theta
+    #   end
+    #   for i in 1:Nct
+    #     sh[i,2] = (ct[i,1]-sh[i,1]*worldLc)/worldLm
+    #   return sh
+    # end
 
   # Optimal price, from profit = 0
     function popt(q_c::Float64, ct::Matrix)
@@ -171,22 +246,7 @@ Topt   = 15.0
     # I use NLopt because the multiple occurence of theta_w() in the constraint
     # would have complicated a lot the expression in @NLconstraint
 
-    ######################################
-    ############# COUNTRIES ##############
-    ######################################
 
-    # A function to generate a sorted list of countries
-        function sortct(Lmax::Vector, t::Vector, sigma::Vector)
-          # Number of countries
-            Nct = length(Lmax)
-          # Sum of all countries land endowments
-            Lsum = sum(Lmax[i] for i in 1:Nct)
-          # Distance from optimal temperature for all countries
-            dist = collect(d(t[i]) for i in 1:Nct)
-          # Sorting countries by decreasing theta(d)
-            countries = hcat(Lmax, theta(dist), sigma, t, dist)
-            ct = sortrows(countries, by=x->x[2], rev=true) # 1st sort by decreasing thetas
-        end
 
 function trade_eq(Lmax::Vector, t::Vector, sigma::Vector)
 

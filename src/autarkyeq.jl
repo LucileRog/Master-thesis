@@ -12,16 +12,16 @@ using Ipopt
 using AmplNLWriter, CoinOptServices
 
 # PARAMETERS
-
-# Technology parameters (do not vary from one country to another)
-a = 10.0 # coef of conversion of crop into meat
-b = 1e-4 # coef of conversion of land into meat
-gamma1 = 3800/15 # coef of conversion of land into crop
-                # http://data.worldbank.org/indicator/AG.YLD.CREL.KG
-gamma2 = 600 # slope coef of how crop productivity decreases with distance to
-             # optimal temperature
-# Optimal temeprature
-Topt = 15.0
+    # Technology parameters (do not vary from one country to another)
+    a      = 1e4      # how many kg of meat produced with one unit of land (ha)
+    b      = 1/6.5    # how many kg of meat produced with one unit of cereals (kgs)
+                      # http://www.nature.com/nature/journal/v418/n6898/full/nature01014.html
+    gamma1 = 3800/15  # how many kgs of cereals with one unit of land (ha)
+                      # http://data.worldbank.org/indicator/AG.YLD.CREL.KG
+    gamma2 = 600      # slope coef of how crop productivity decreases with
+                      # distance to optimal temperature
+    # Optimal temeprature
+    Topt   = 15.0
 
   ######################################
   ############### SUPPLY ###############
@@ -34,11 +34,7 @@ Topt = 15.0
 
     # crop productivity
     function theta(d::Float64)
-      if gamma1 * Topt - gamma2 *d > 0.0
-        return gamma1 * Topt - gamma2 *d
-      else
-        return 0.0
-      end
+      max(gamma1 * Topt - gamma2 *d, 0.0)
     end
 
     # Optimal price, from profit = 0
@@ -118,12 +114,6 @@ function autarky_eq(Lmax::Float64, t::Float64, sigma::Float64)
 
   p      = popt(d)
   res    = maxuty(p, Lmax, d, sigma)
-
-  # if maxqc == 0.0
-  #   num_qc = 0.0
-  # else
-  #   num_qc = fzeros(q_c -> num_RD - num_RS(q_c), 0.0, maxqc)[1]
-  # end
 
   num_qm = res[1]
   num_qc = res[2]

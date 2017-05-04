@@ -16,15 +16,14 @@ using Roots
 # PARAMETERS
 
 # Technology parameters (do not vary from one country to another)
-a = 10.0 # coef of conversion of crop into meat
-b = 1e-4 # coef of conversion of land into meat
-gamma1 = 3800/15 # coef of conversion of land into crop
-                # http://data.worldbank.org/indicator/AG.YLD.CREL.KG
-gamma2 = 600 # slope coef of how crop productivity decreases with distance to
-             # optimal temperature
-
+a      = 1e4      # how many kg of meat produced with one unit of land (ha)
+b      = 1/10     # how many kg of meat produced with one unit of cereals (kgs)
+gamma1 = 3800/15  # how many kgs of cereals with one unit of land (ha)
+                  # http://data.worldbank.org/indicator/AG.YLD.CREL.KG
+gamma2 = 600      # slope coef of how crop productivity decreases with distance to
+                  # optimal temperature
 # Optimal temeprature
-Topt = 15.0
+Topt   = 15.0
 
 # Temperature dynamics parameters
 k1     = 200.0 # kg of GHG emissions per kg of meat produced
