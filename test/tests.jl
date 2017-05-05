@@ -1,4 +1,3 @@
-module Modeltests
 
 using Base.Test
 
@@ -44,7 +43,7 @@ res = collect(autarkyeq.autarky_eq(grid[i,1], grid[i,2], grid[i,3]) for i in 1:n
   end
 
   @testset "Optimal q_c and q_m, Analytical vs. Numerical" begin
-  tol = 1e-1
+  tol = 1e-6
     for i in 1:ntest
       @test abs(res[i]["Optimal net cereal consumption"] - res[i]["Optimal net c C° num"]) < tol
     end
@@ -128,6 +127,3 @@ include("../src/subsistconst.jl")
   end
 
 end # subsistence const
-
-
-end # Module

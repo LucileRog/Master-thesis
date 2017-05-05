@@ -8,6 +8,7 @@ using Roots
 using NLopt
 using Optim
 using JuMP
+using ApproxFun
 using Ipopt
 
 
@@ -37,15 +38,7 @@ Topt   = 15.0
 
   # Crop productivity at the country level
     function theta(d::Vector)
-      theta = ones(length(d))
-      for i in 1:length(d)
-        if gamma1 * Topt - gamma2 *d[i] > 0.0
-          theta[i] = gamma1 * Topt - gamma2 *d[i]
-        else
-          theta[i] = 0.0
-        end
-      end
-      return theta
+      [max(gamma1 * Topt - gamma2 *d[i] , 0.0) for i in 1:length(d)]
     end
 
 
@@ -86,11 +79,17 @@ Topt   = 15.0
     function L_c(q_c::Float64, ct::Matrix)
       Nct = length(ct[:,1])
       Lsum = sum(ct[i,1] for i in 1:Nct)
+      # if Nct == 1
         if length(fzeros(L_c -> a*(Lsum - L_c) - b*(num_theta_w(L_c, ct)[2]*L_c - q_c), 1.0, Lsum)) == 1
           return fzeros(L_c -> a*(Lsum - L_c) - b*(num_theta_w(L_c, ct)[2]*L_c - q_c), 1.0, Lsum)[1]
         else
          0.0
         end
+      # elseif Nct > 1
+      #   f = Fun(x -> num_theta_w(x, ct)[2], 0.0..Lsum)
+      #   h = a*(Lsum - x) - b*(x*f - q_c)
+      #   r = roots(h)
+      # end
     end
 
   # returns countries shares of land allocated to cereals and meat
@@ -113,9 +112,7 @@ Topt   = 15.0
     function popt(q_c::Float64, ct::Matrix)
       Nct = length(ct[:,1])
       sharem = num_shares(q_c, ct)[2]
-      for i in 1:Nct
-        return (1/a)*sum(sharem[i]*ct[i,2]) + 1/b
-      end
+      return (1/a)*sum(sharem[i]*ct[i,2] for i in 1:Nct) + 1/b
     end
     # about 2.7 seconds
 
