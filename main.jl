@@ -1,10 +1,12 @@
 pwd()
-#include("src/autarkyeq.jl")
-include("src/tradeeq.jl")
-#include("src/dynamictemp.jl")
 
-#autarkyeq.runall(10000.0, 13.0, .5)
-#autarkyeq.plotall()
-tradeeq.runall()
-#dynamictemp.runall(50, 1000.0, 13.0, 1.0)
-#dynamictemp.plotall(50, 1000.0, 13.0, 1.0)
+include("src/autarkyeq.jl")
+include("src/tradeeq.jl")
+include("src/subsistconst.jl")
+
+autarkyeq.runall(Lmax::Flaot64, t::Float64, sigma::Flaot64)
+autarkyplots.plotall()
+
+tradeeqdf.runall(Lmax::Vector, T::Vector, sigma::Vector)
+
+subsistconst.subsist(Lmax, T, sigma)
